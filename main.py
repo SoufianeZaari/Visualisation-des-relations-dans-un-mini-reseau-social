@@ -1,6 +1,5 @@
-﻿# main.py
-
-import os
+﻿import os #pour la gestion des dossiers et fichiers
+# Importation des fonctions depuis les modules src/
 from src.construction_graphe import creer_reseau_social, sauvegarder_graphe
 from src.visualisation import (appliquer_layouts, visualiser_layout_unique, 
                                 visualiser_tous_layouts)
@@ -10,8 +9,11 @@ from src.analyse import analyser_reseau, afficher_rapport_analyse, visualiser_me
 from src.visualisation_3d import visualisation_3d
 
 def main():
-    os.makedirs("output/images", exist_ok=True)
-    os.makedirs("data", exist_ok=True)
+    
+    # Création des dossiers de sortie
+    os.makedirs("output/images", exist_ok=True) # Pour sauvegarder les images
+    os.makedirs("data", exist_ok=True) # Pour sauvegarder le graphe
+
     
     print("PROJET: Visualisation des Relations dans un Mini Reseau Social")
     print("=" * 70)

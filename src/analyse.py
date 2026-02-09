@@ -1,35 +1,40 @@
 ﻿# src/analyse.py
 
-import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
+import networkx as nx #manipulation et analyse des graphes
+import matplotlib.pyplot as plt #visualisation graphique
+import numpy as np #calcul numérique
+import pandas as pd #manipulation de données
 
-def analyser_reseau(G):
-    analyse = {}
-    analyse['nb_noeuds'] = G.number_of_nodes()
-    analyse['nb_aretes'] = G.number_of_edges()
-    analyse['densite'] = nx.density(G)
-    analyse['diametre'] = nx.diameter(G) if nx.is_connected(G) else "Non connexe"
-    analyse['rayon'] = nx.radius(G) if nx.is_connected(G) else "Non connexe"
-    analyse['degre_moyen'] = sum(dict(G.degree()).values()) / G.number_of_nodes()
+def analyser_reseau(G): #Cette fonction calcule toutes les métriques importantes du réseau.
+    analyse = {} #Dictionnaire pour stocker les résultats de l'analyse
+    analyse['nb_noeuds'] = G.number_of_nodes() #Nombre d’utilisateurs
+    analyse['nb_aretes'] = G.number_of_edges() #Nombre de relations
+    analyse['densite'] = nx.density(G) #Taux de connexions existantes
+    analyse['diametre'] = nx.diameter(G) if nx.is_connected(G) else "Non connexe" #Distance maximale entre deux utilisateurs
+    analyse['rayon'] = nx.radius(G) if nx.is_connected(G) else "Non connexe" #Distance minimale maximale entre un utilisateur et tous les autres
+    analyse['degre_moyen'] = sum(dict(G.degree()).values()) / G.number_of_nodes() #Distance maximale entre deux utilisateurs
+     # Mesures de clustering
     analyse['clustering_moyen'] = nx.average_clustering(G)
     analyse['clustering_global'] = nx.transitivity(G)
-    analyse['degree_centrality'] = nx.degree_centrality(G)
-    analyse['betweenness_centrality'] = nx.betweenness_centrality(G)
-    analyse['closeness_centrality'] = nx.closeness_centrality(G)
-    analyse['eigenvector_centrality'] = nx.eigenvector_centrality(G, max_iter=1000)
+    analyse['degree_centrality'] = nx.degree_centrality(G) #Popularité des utilisateurs
+    analyse['betweenness_centrality'] = nx.betweenness_centrality(G) #Capacité d’intermédiaire
+    analyse['closeness_centrality'] = nx.closeness_centrality(G) #Rapidité pour atteindre les autres
+    analyse['eigenvector_centrality'] = nx.eigenvector_centrality(G, max_iter=1000) #Influence globale dans le réseau
     from networkx.algorithms import community
-    communities = community.greedy_modularity_communities(G)
+    communities = community.greedy_modularity_communities(G) #Détection de communautés par maximisation de la modularité
     analyse['communautes'] = [list(c) for c in communities]
     analyse['nb_communautes'] = len(communities)
-    analyse['modularite'] = community.modularity(G, communities)
+    analyse['modularite'] = community.modularity(G, communities) #la qualité de la séparation des communautés
+  ## Identification des utilisateurs influents  
+    # Top 5 selon la centralité de degré
     top_degree = sorted(analyse['degree_centrality'].items(), key=lambda x: x[1], reverse=True)[:5]
+    # Top 5 selon la centralité d’intermédiaire
     top_betweenness = sorted(analyse['betweenness_centrality'].items(), key=lambda x: x[1], reverse=True)[:5]
+    #Utilisateurs les plus influents
     analyse['top_degree'] = [(G.nodes[n]['nom'], round(v, 3)) for n, v in top_degree]
     analyse['top_betweenness'] = [(G.nodes[n]['nom'], round(v, 3)) for n, v in top_betweenness]
     return analyse
-
+    ##   Affiche un rapport détaillé de l’analyse dans la console.
 def afficher_rapport_analyse(analyse, G):
     print("=" * 60)
     print("RAPPORT D'ANALYSE DU RESEAU SOCIAL")
@@ -63,16 +68,18 @@ def afficher_rapport_analyse(analyse, G):
         print(f"  - {nom}: {score}")
     print("\n" + "=" * 60)
 
-def visualiser_metriques(G, analyse):
+def visualiser_metriques(G, analyse): #Génère 4 visualisations graphiques
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    # Graphique 1 : Distribution des degrés
     ax1 = axes[0, 0]
     degrees = [d for n, d in G.degree()]
-    ax1.hist(degrees, bins=range(min(degrees), max(degrees)+2), edgecolor='black', alpha=0.7, color='#3498db')
+    ax1.hist(degrees, bins=range(min(degrees), max(degrees)+2), edgecolor='black', alpha=0.7, color='#3498db') #Montre la répartition des connexions
     ax1.set_xlabel('Degre')
     ax1.set_ylabel('Frequence')
     ax1.set_title('Distribution des Degres')
     ax1.axvline(np.mean(degrees), color='red', linestyle='--', label=f'Moyenne: {np.mean(degrees):.2f}')
     ax1.legend()
+     # Graphique 2 : Centralités
     ax2 = axes[0, 1]
     nodes = list(G.nodes())
     noms = [G.nodes[n]['nom'] for n in nodes]
@@ -87,6 +94,7 @@ def visualiser_metriques(G, analyse):
     ax2.set_ylabel('Centralite')
     ax2.set_title('Comparaison des Centralites')
     ax2.legend()
+     # Graphique 3 : Clustering
     ax3 = axes[1, 0]
     clustering = nx.clustering(G)
     clust_values = [clustering[n] for n in nodes]
@@ -98,6 +106,7 @@ def visualiser_metriques(G, analyse):
     ax3.set_title('Clustering par Utilisateur')
     ax3.axhline(analyse['clustering_moyen'], color='red', linestyle='--', label=f"Moyenne: {analyse['clustering_moyen']:.2f}")
     ax3.legend()
+    # Graphique 4 : Visualisation du réseau et communautés
     ax4 = axes[1, 1]
     pos = nx.spring_layout(G, seed=42)
     couleurs_comm = plt.cm.Set3(np.linspace(0, 1, len(analyse['communautes'])))
@@ -113,6 +122,7 @@ def visualiser_metriques(G, analyse):
     nx.draw_networkx_labels(G, pos, labels, font_size=6, ax=ax4)
     ax4.set_title(f"Communautes Detectees ({analyse['nb_communautes']} communautes)")
     ax4.axis('off')
+    #Sauvegarde de la figure
     plt.tight_layout()
     plt.savefig("output/images/analyse_metriques.png", dpi=300, bbox_inches='tight')
     plt.close()
