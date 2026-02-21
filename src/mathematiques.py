@@ -9,6 +9,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import deque
 
 
 # =============================================================================
@@ -170,10 +171,10 @@ def _bfs_distances(A, source):
     n = A.shape[0]
     distances = np.full(n, -1)
     distances[source] = 0
-    queue = [source]
+    queue = deque([source])
 
     while queue:
-        current = queue.pop(0)
+        current = queue.popleft()
         for neighbor in range(n):
             if A[current][neighbor] == 1 and distances[neighbor] == -1:
                 distances[neighbor] = distances[current] + 1
@@ -213,10 +214,10 @@ def calculer_betweenness_centralite(A):
         sigma[s] = 1
         dist = np.full(n, -1)
         dist[s] = 0
-        queue = [s]
+        queue = deque([s])
 
         while queue:
-            v = queue.pop(0)
+            v = queue.popleft()
             stack.append(v)
             for w in range(n):
                 if A[v][w] == 1:
@@ -337,8 +338,7 @@ def layout_spectral_manuel(A):
     donnent des raffinements successifs.
     """
     D = construire_matrice_degre(A)
-    L = A.astype(float)
-    L = D - L
+    L = D - A.astype(float)
 
     # Décomposition en valeurs propres de la Laplacienne
     eigenvalues, eigenvectors = np.linalg.eigh(L)
