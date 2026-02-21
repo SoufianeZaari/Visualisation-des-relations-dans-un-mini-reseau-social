@@ -1,0 +1,851 @@
+\documentclass[12pt,a4paper]{article}
+
+% =============================================================================
+% PACKAGES
+% =============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{graphs, positioning, arrows.meta}
+
+\geometry{margin=2.5cm}
+
+% Style pour le code Python
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true,
+    captionpos=b
+}
+
+% Théorèmes et définitions
+\newtheorem{definition}{Définition}[section]
+\newtheorem{theoreme}{Théorème}[section]
+\newtheorem{propriete}{Propriété}[section]
+\newtheorem{lemme}{Lemme}[section]
+
+% =============================================================================
+% PAGE DE TITRE
+% =============================================================================
+\title{
+    \vspace{-1cm}
+    \textbf{Visualisation des Relations dans un Mini Réseau Social} \\[0.5cm]
+    \large Analyse de Données -- Projet \\[0.3cm]
+    \normalsize Fondements Mathématiques et Implémentation
+}
+\author{Projet de Visualisation de Réseau Social}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Ce rapport présente une étude complète de la visualisation et de l'analyse d'un mini réseau social modélisé par un graphe simple non orienté de 25 n\oe{}uds et 40 arêtes. Nous développons les fondements mathématiques de chaque technique utilisée~: représentation matricielle des graphes (matrice d'adjacence, matrice Laplacienne), mesures de centralité (degré, intermédiarité, proximité), algorithmes de positionnement (Fruchterman-Reingold, layout spectral), et techniques de réduction de dimension (ACP par décomposition en valeurs propres, t-SNE par minimisation de la divergence de Kullback-Leibler). Chaque algorithme est d'abord implémenté manuellement à partir des formules mathématiques, puis validé par comparaison avec les bibliothèques standards. Les résultats montrent qu'Alice est l'utilisateur le plus central du réseau, et que 5 communautés émergent naturellement de la structure topologique du graphe.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+% 1. INTRODUCTION
+% =============================================================================
+\section{Introduction}
+
+\subsection{Contexte et Motivation}
+
+L'analyse des réseaux sociaux est un domaine central de la science des données qui s'appuie fortement sur la théorie des graphes. Un réseau social peut être naturellement modélisé par un graphe $G = (V, E)$ où les sommets $V$ représentent les individus et les arêtes $E$ les relations entre eux.
+
+L'objectif de ce projet est triple~:
+\begin{enumerate}
+    \item \textbf{Construire} un graphe représentatif d'un mini réseau social (25 utilisateurs, 40 relations).
+    \item \textbf{Visualiser} ce graphe en utilisant différentes techniques de positionnement et de réduction de dimension, en comprenant les fondements mathématiques de chaque méthode.
+    \item \textbf{Analyser} la structure du réseau pour identifier les utilisateurs centraux et les communautés.
+\end{enumerate}
+
+\subsection{Organisation du Rapport}
+
+Le rapport est structuré comme suit~: la section~\ref{sec:theorie} présente les fondements théoriques de la théorie des graphes. La section~\ref{sec:representation} détaille la représentation matricielle du graphe. La section~\ref{sec:centralites} développe les mesures de centralité avec leurs formules et algorithmes. La section~\ref{sec:layouts} explique les algorithmes de positionnement. La section~\ref{sec:reduction} traite des techniques de réduction de dimension (ACP et t-SNE). La section~\ref{sec:resultats} présente les résultats expérimentaux. La section~\ref{sec:analyse} fournit une analyse détaillée, et la section~\ref{sec:conclusion} conclut le rapport.
+
+% =============================================================================
+% 2. FONDEMENTS THÉORIQUES
+% =============================================================================
+\section{Fondements de la Théorie des Graphes}
+\label{sec:theorie}
+
+\subsection{Définitions Fondamentales}
+
+\begin{definition}[Graphe simple non orienté]
+Un \emph{graphe simple non orienté} est un couple $G = (V, E)$ où~:
+\begin{itemize}
+    \item $V = \{v_1, v_2, \ldots, v_n\}$ est un ensemble fini de \emph{sommets} (ou n\oe{}uds),
+    \item $E \subseteq \binom{V}{2} = \{\{u, v\} \mid u, v \in V, u \neq v\}$ est un ensemble d'\emph{arêtes}.
+\end{itemize}
+Un graphe simple n'admet ni boucles ($\{v, v\}$) ni arêtes multiples.
+\end{definition}
+
+Dans notre projet~: $|V| = n = 25$ (utilisateurs) et $|E| = m = 40$ (relations d'amitié).
+
+\begin{definition}[Degré d'un sommet]
+Le \emph{degré} d'un sommet $v \in V$, noté $\deg(v)$ ou $d(v)$, est le nombre d'arêtes incidentes à $v$~:
+\[
+    \deg(v) = |\{e \in E \mid v \in e\}|
+\]
+\end{definition}
+
+\begin{theoreme}[Lemme des poignées de main -- Euler, 1736]
+Pour tout graphe $G = (V, E)$~:
+\[
+    \sum_{v \in V} \deg(v) = 2|E|
+\]
+\end{theoreme}
+
+\begin{proof}
+Chaque arête $\{u, v\} \in E$ contribue exactement $+1$ au degré de $u$ et $+1$ au degré de $v$, donc $+2$ à la somme totale des degrés.
+\end{proof}
+
+\noindent \textbf{Vérification dans notre graphe~:} $\sum_{v \in V} \deg(v) = 80 = 2 \times 40 = 2|E|$ \checkmark
+
+\begin{definition}[Densité]
+La \emph{densité} d'un graphe simple non orienté est le rapport entre le nombre d'arêtes existantes et le nombre maximal d'arêtes possibles~:
+\[
+    \delta(G) = \frac{2|E|}{|V|(|V|-1)} = \frac{|E|}{\binom{n}{2}}
+\]
+\end{definition}
+
+\noindent \textbf{Application~:} $\delta(G) = \frac{2 \times 40}{25 \times 24} = \frac{80}{600} = 0{,}1333$. Le réseau est peu dense~: seulement 13,3\% des connexions possibles existent.
+
+\begin{definition}[Chemin et Distance]
+Un \emph{chemin} de longueur $k$ entre deux sommets $u$ et $v$ est une séquence de sommets $u = w_0, w_1, \ldots, w_k = v$ telle que $\{w_{i-1}, w_i\} \in E$ pour tout $i \in \{1, \ldots, k\}$.
+
+La \emph{distance} $d(u, v)$ est la longueur du plus court chemin entre $u$ et $v$.
+\end{definition}
+
+\begin{definition}[Diamètre et Rayon]
+\begin{itemize}
+    \item L'\emph{excentricité} d'un sommet~: $\text{ecc}(v) = \max_{u \in V} d(v, u)$
+    \item Le \emph{diamètre}~: $\text{diam}(G) = \max_{v \in V} \text{ecc}(v) = \max_{u,v \in V} d(u,v)$
+    \item Le \emph{rayon}~: $\text{rad}(G) = \min_{v \in V} \text{ecc}(v)$
+\end{itemize}
+\end{definition}
+
+\noindent \textbf{Résultats~:} $\text{diam}(G) = 6$, $\text{rad}(G) = 4$.
+
+\begin{definition}[Coefficient de clustering]
+Le \emph{coefficient de clustering local} d'un sommet $v$ de degré $d(v) \geq 2$ mesure la proportion de triangles autour de $v$~:
+\[
+    C(v) = \frac{2 \cdot |\{\{u, w\} \in E \mid u, w \in \mathcal{N}(v)\}|}{d(v)(d(v) - 1)}
+\]
+où $\mathcal{N}(v) = \{u \in V \mid \{u, v\} \in E\}$ est le voisinage de $v$.
+
+Le \emph{coefficient de clustering moyen} du graphe est~:
+\[
+    \bar{C} = \frac{1}{n} \sum_{v \in V} C(v) = 0{,}0240
+\]
+
+Le \emph{coefficient de clustering global} (transitivité) est~:
+\[
+    C_{\text{global}} = \frac{3 \times \text{nombre de triangles}}{\text{nombre de triplets connectés}} = 0{,}0309
+\]
+\end{definition}
+
+% =============================================================================
+% 3. REPRÉSENTATION MATRICIELLE
+% =============================================================================
+\section{Représentation Matricielle du Graphe}
+\label{sec:representation}
+
+\subsection{Matrice d'Adjacence}
+
+\begin{definition}[Matrice d'adjacence]
+La \emph{matrice d'adjacence} $A \in \{0, 1\}^{n \times n}$ d'un graphe $G = (V, E)$ est définie par~:
+\[
+    A_{ij} = \begin{cases}
+        1 & \text{si } \{v_i, v_j\} \in E \\
+        0 & \text{sinon}
+    \end{cases}
+\]
+\end{definition}
+
+\begin{propriete}[Propriétés de $A$]
+Pour un graphe simple non orienté~:
+\begin{enumerate}
+    \item $A$ est \emph{symétrique}~: $A = A^T$
+    \item $\text{Trace}(A) = 0$ (pas de boucles)
+    \item $\sum_j A_{ij} = \deg(v_i)$ (somme de la ligne $i$ = degré du n\oe{}ud $i$)
+    \item $(A^k)_{ij}$ = nombre de chemins de longueur exactement $k$ entre $v_i$ et $v_j$
+\end{enumerate}
+\end{propriete}
+
+\begin{proof}[Preuve de la propriété 4]
+Par récurrence sur $k$.
+
+\textbf{Base ($k = 1$)~:} $(A^1)_{ij} = A_{ij}$, qui vaut 1 si et seulement si $\{v_i, v_j\} \in E$, i.e., il existe un chemin de longueur 1 entre $v_i$ et $v_j$.
+
+\textbf{Induction~:} Supposons que $(A^k)_{ij}$ compte le nombre de chemins de longueur $k$ entre $v_i$ et $v_j$. Alors~:
+\[
+    (A^{k+1})_{ij} = \sum_{\ell=1}^{n} (A^k)_{i\ell} \cdot A_{\ell j}
+\]
+Chaque terme $(A^k)_{i\ell} \cdot A_{\ell j}$ compte les chemins de longueur $k$ de $v_i$ à $v_\ell$ multipliés par l'existence d'une arête de $v_\ell$ à $v_j$, soit les chemins de longueur $k+1$ passant par $v_\ell$ en avant-dernier sommet.
+\end{proof}
+
+\subsection{Matrice de Degré}
+
+\begin{definition}[Matrice de degré]
+La \emph{matrice de degré} $D \in \mathbb{R}^{n \times n}$ est la matrice diagonale~:
+\[
+    D = \text{diag}(d_1, d_2, \ldots, d_n) \quad \text{où } d_i = \deg(v_i) = \sum_{j=1}^{n} A_{ij}
+\]
+\end{definition}
+
+\subsection{Matrice Laplacienne}
+
+\begin{definition}[Matrice Laplacienne]
+La \emph{matrice Laplacienne} du graphe est~:
+\[
+    L = D - A
+\]
+Explicitement~:
+\[
+    L_{ij} = \begin{cases}
+        \deg(v_i)  & \text{si } i = j \\
+        -1         & \text{si } i \neq j \text{ et } \{v_i, v_j\} \in E \\
+        0          & \text{sinon}
+    \end{cases}
+\]
+\end{definition}
+
+\begin{theoreme}[Propriétés spectrales de la Laplacienne]
+\label{thm:laplacian}
+Soit $0 = \lambda_1 \leq \lambda_2 \leq \cdots \leq \lambda_n$ les valeurs propres de $L$~:
+\begin{enumerate}
+    \item $L$ est \emph{semi-définie positive}~: $\forall x \in \mathbb{R}^n, \; x^T L x \geq 0$
+    \item $\lambda_1 = 0$ toujours (le vecteur propre associé est $\mathbf{1} = (1, 1, \ldots, 1)^T$)
+    \item Le nombre de valeurs propres nulles égale le nombre de composantes connexes
+    \item $\lambda_2 > 0 \Leftrightarrow G$ est connexe ($\lambda_2$ est la \emph{connectivité algébrique de Fiedler})
+\end{enumerate}
+\end{theoreme}
+
+\begin{proof}[Preuve de la propriété 1]
+Pour tout $x \in \mathbb{R}^n$~:
+\[
+    x^T L x = x^T (D - A) x = \sum_{i} d_i x_i^2 - 2 \sum_{\{i,j\} \in E} x_i x_j = \sum_{\{i,j\} \in E} (x_i - x_j)^2 \geq 0
+\]
+La dernière égalité se vérifie en développant $\sum_{\{i,j\} \in E} (x_i - x_j)^2 = \sum_{\{i,j\} \in E} (x_i^2 - 2x_i x_j + x_j^2)$, et en remarquant que $\sum_{\{i,j\} \in E} (x_i^2 + x_j^2) = \sum_i d_i x_i^2$.
+\end{proof}
+
+\noindent \textbf{Résultats spectraux de notre graphe~:}
+\begin{itemize}
+    \item $\lambda_1 = 0{,}000$ (confirme la connexité~: une seule composante connexe)
+    \item $\lambda_2 = 0{,}307$ (connectivité algébrique de Fiedler)
+    \item $\lambda_{\max} = 7{,}252$
+\end{itemize}
+
+\begin{definition}[Laplacienne normalisée]
+La \emph{matrice Laplacienne normalisée} est~:
+\[
+    \mathcal{L} = D^{-1/2} L D^{-1/2} = I - D^{-1/2} A D^{-1/2}
+\]
+Ses valeurs propres sont bornées dans $[0, 2]$, ce qui facilite la comparaison entre graphes de tailles différentes.
+\end{definition}
+
+% =============================================================================
+% 4. MESURES DE CENTRALITÉ
+% =============================================================================
+\section{Mesures de Centralité}
+\label{sec:centralites}
+
+Les mesures de centralité quantifient l'importance relative de chaque sommet dans le réseau. Nous présentons quatre mesures fondamentales, chacune avec sa formule, son algorithme et son interprétation.
+
+\subsection{Centralité de Degré}
+
+\begin{definition}[Centralité de degré]
+La \emph{centralité de degré} d'un sommet $v$ est~:
+\[
+    C_D(v) = \frac{\deg(v)}{n - 1}
+\]
+C'est la proportion de n\oe{}uds auxquels $v$ est directement connecté. $C_D(v) \in [0, 1]$.
+\end{definition}
+
+\textbf{Complexité~:} $O(n + m)$ pour calculer tous les degrés.
+
+\textbf{Implémentation~:} Le calcul se réduit à la somme des lignes de la matrice d'adjacence~:
+\[
+    C_D(v_i) = \frac{1}{n-1} \sum_{j=1}^{n} A_{ij}
+\]
+
+\subsection{Centralité de Proximité (Closeness)}
+
+\begin{definition}[Centralité de proximité]
+La \emph{centralité de proximité} d'un sommet $v$ est l'inverse de la distance moyenne aux autres sommets~:
+\[
+    C_C(v) = \frac{n - 1}{\sum_{u \neq v} d(v, u)}
+\]
+où $d(v, u)$ est la distance du plus court chemin entre $v$ et $u$.
+\end{definition}
+
+\textbf{Algorithme~:} Pour chaque sommet source $v$, on effectue un parcours en largeur (BFS -- Breadth-First Search) pour calculer les distances $d(v, u)$ vers tous les autres sommets. La complexité est $O(n \cdot (n + m))$.
+
+\begin{algorithm}[H]
+\caption{BFS pour le calcul des distances}
+\begin{algorithmic}[1]
+\Require Matrice d'adjacence $A$, sommet source $s$
+\Ensure Vecteur des distances $\text{dist}[]$
+\State $\text{dist}[v] \leftarrow \infty$ pour tout $v \in V$
+\State $\text{dist}[s] \leftarrow 0$
+\State $\text{file} \leftarrow \{s\}$
+\While{$\text{file} \neq \emptyset$}
+    \State $v \leftarrow \text{d\'{e}filer}(\text{file})$
+    \For{$w$ tel que $A[v][w] = 1$}
+        \If{$\text{dist}[w] = \infty$}
+            \State $\text{dist}[w] \leftarrow \text{dist}[v] + 1$
+            \State $\text{enfiler}(\text{file}, w)$
+        \EndIf
+    \EndFor
+\EndWhile
+\State \Return $\text{dist}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Centralité d'Intermédiarité (Betweenness)}
+
+\begin{definition}[Centralité d'intermédiarité]
+La \emph{centralité d'intermédiarité} d'un sommet $v$ mesure sa fréquence d'apparition sur les plus courts chemins entre toutes les paires de sommets~:
+\[
+    C_B(v) = \sum_{\substack{s \neq v \neq t \\ s \neq t}} \frac{\sigma_{st}(v)}{\sigma_{st}}
+\]
+où~:
+\begin{itemize}
+    \item $\sigma_{st}$ = nombre total de plus courts chemins entre $s$ et $t$
+    \item $\sigma_{st}(v)$ = nombre de ces chemins passant par $v$
+\end{itemize}
+
+La normalisation pour un graphe non orienté donne~:
+\[
+    C_B^{\text{norm}}(v) = \frac{C_B(v)}{\frac{(n-1)(n-2)}{2}}
+\]
+\end{definition}
+
+\textbf{Algorithme de Brandes (2001)~:} Complexité $O(n \cdot m)$ au lieu de $O(n^3)$ pour l'approche naïve.
+
+L'algorithme procède en deux phases pour chaque sommet source $s$~:
+\begin{enumerate}
+    \item \textbf{Phase avant (BFS)~:} Calcule les distances et le nombre de plus courts chemins $\sigma_{s \cdot}$ depuis $s$.
+    \item \textbf{Phase arrière (back-propagation)~:} Accumule les contributions $\delta_s(v)$ en parcourant les sommets par distance décroissante~:
+    \[
+        \delta_s(v) = \sum_{w : v \in \text{pred}(w)} \frac{\sigma_{sv}}{\sigma_{sw}} \cdot (1 + \delta_s(w))
+    \]
+\end{enumerate}
+
+\subsection{Centralité de Vecteur Propre (Eigenvector)}
+
+\begin{definition}[Centralité de vecteur propre]
+La \emph{centralité de vecteur propre} $x_v$ est définie comme la composante $v$ du vecteur propre principal de la matrice d'adjacence $A$, i.e., le vecteur propre associé à la plus grande valeur propre $\lambda_{\max}$~:
+\[
+    A \mathbf{x} = \lambda_{\max} \mathbf{x} \quad \Leftrightarrow \quad x_v = \frac{1}{\lambda_{\max}} \sum_{u \in \mathcal{N}(v)} x_u
+\]
+\end{definition}
+
+L'interprétation est récursive~: un sommet est important s'il est connecté à d'autres sommets importants. C'est le principe sous-jacent de l'algorithme PageRank de Google.
+
+% =============================================================================
+% 5. ALGORITHMES DE LAYOUT
+% =============================================================================
+\section{Algorithmes de Positionnement (Layout)}
+\label{sec:layouts}
+
+Le problème du \emph{graph drawing} consiste à trouver des positions $\text{pos} : V \to \mathbb{R}^2$ (ou $\mathbb{R}^3$) pour les sommets du graphe de manière à produire une visualisation lisible et esthétique.
+
+\subsection{Layout Force-Directed (Fruchterman-Reingold)}
+
+L'algorithme de Fruchterman-Reingold (1991) modélise le graphe comme un système physique de particules avec des forces d'attraction et de répulsion.
+
+\subsubsection{Modèle de Forces}
+
+\begin{definition}[Forces du modèle Fruchterman-Reingold]
+Soit $k = C \cdot \sqrt{\frac{\text{aire}}{n}}$ la distance idéale entre n\oe{}uds~:
+\begin{itemize}
+    \item \textbf{Force d'attraction} (entre n\oe{}uds connectés, comme des ressorts)~:
+    \[
+        f_a(d) = \frac{d^2}{k}
+    \]
+    \item \textbf{Force de répulsion} (entre toutes les paires, comme des charges électriques)~:
+    \[
+        f_r(d) = -\frac{k^2}{d}
+    \]
+\end{itemize}
+où $d = \|\text{pos}(u) - \text{pos}(v)\|_2$ est la distance euclidienne entre deux n\oe{}uds.
+\end{definition}
+
+\subsubsection{Algorithme Itératif}
+
+\begin{algorithm}[H]
+\caption{Algorithme de Fruchterman-Reingold}
+\begin{algorithmic}[1]
+\Require Graphe $G = (V, E)$, nombre d'itérations $T$, temp\'{e}rature initiale $t_0$
+\Ensure Positions $\text{pos}(v) \in \mathbb{R}^2$ pour chaque $v \in V$
+\State Initialiser $\text{pos}(v)$ al\'{e}atoirement pour tout $v \in V$
+\State $k \leftarrow \sqrt{1/n}$, $t \leftarrow t_0$
+\For{$\text{iter} = 1$ \textbf{to} $T$}
+    \State $\text{disp}(v) \leftarrow \mathbf{0}$ pour tout $v \in V$
+    \For{paires $(u, v) \in V \times V$, $u \neq v$} \Comment{R\'{e}pulsion}
+        \State $\Delta \leftarrow \text{pos}(u) - \text{pos}(v)$
+        \State $d \leftarrow \max(\|\Delta\|, \epsilon)$
+        \State $\text{disp}(u) \mathrel{+}= \frac{\Delta}{d} \cdot \frac{k^2}{d}$
+    \EndFor
+    \For{$(u, v) \in E$} \Comment{Attraction}
+        \State $\Delta \leftarrow \text{pos}(u) - \text{pos}(v)$
+        \State $d \leftarrow \max(\|\Delta\|, \epsilon)$
+        \State $\text{disp}(u) \mathrel{-}= \frac{\Delta}{d} \cdot \frac{d^2}{k}$
+        \State $\text{disp}(v) \mathrel{+}= \frac{\Delta}{d} \cdot \frac{d^2}{k}$
+    \EndFor
+    \For{$v \in V$}
+        \State $\text{pos}(v) \mathrel{+}= \frac{\text{disp}(v)}{\|\text{disp}(v)\|} \cdot \min(\|\text{disp}(v)\|, t)$
+    \EndFor
+    \State $t \leftarrow t \cdot 0{,}95$ \Comment{Refroidissement simul\'{e}}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+La convergence est assurée par le schéma de \emph{refroidissement simulé}~: à chaque itération, la température $t$ diminue, limitant de plus en plus les déplacements.
+
+\subsection{Layout Spectral}
+
+Le layout spectral utilise les vecteurs propres de la matrice Laplacienne pour positionner les n\oe{}uds.
+
+\subsubsection{Fondement Mathématique}
+
+Le problème d'optimisation sous-jacent est~:
+\[
+    \min_{x \in \mathbb{R}^n} \sum_{\{i,j\} \in E} (x_i - x_j)^2 = \min_{x \in \mathbb{R}^n} x^T L x
+\]
+sous les contraintes~:
+\begin{itemize}
+    \item $x^T \mathbf{1} = 0$ (centrage, pour éviter la solution triviale $x = \mathbf{1}$)
+    \item $x^T x = 1$ (normalisation)
+\end{itemize}
+
+\begin{theoreme}[Quotient de Rayleigh]
+La solution du problème ci-dessus est le \emph{vecteur de Fiedler} $v_2$, c'est-à-dire le vecteur propre associé à la deuxième plus petite valeur propre $\lambda_2$ de $L$~:
+\[
+    \min_{\substack{x^T \mathbf{1} = 0 \\ x^T x = 1}} x^T L x = \lambda_2
+\]
+\end{theoreme}
+
+\subsubsection{Positionnement en 2D}
+
+Pour obtenir des coordonnées 2D, on utilise les deux premiers vecteurs propres non triviaux~:
+\[
+    \text{pos}(v_i) = (v_2[i], \; v_3[i])
+\]
+où $v_2$ et $v_3$ sont les vecteurs propres associés à $\lambda_2$ et $\lambda_3$.
+
+L'intuition est que les n\oe{}uds fortement connectés auront des coordonnées proches, car le vecteur de Fiedler minimise la somme des carrés des différences $\sum_{\{i,j\} \in E} (x_i - x_j)^2$.
+
+\subsection{Layout de Kamada-Kawai}
+
+L'algorithme de Kamada-Kawai (1989) modélise le graphe comme un système de ressorts dont les longueurs idéales sont proportionnelles aux distances dans le graphe.
+
+\subsubsection{Fonction d'Énergie}
+
+\[
+    E = \sum_{i < j} k_{ij} \left( \|\text{pos}(i) - \text{pos}(j)\| - l_{ij} \right)^2
+\]
+où~:
+\begin{itemize}
+    \item $l_{ij} = L_0 \cdot d_{ij}$ est la longueur idéale du ressort ($d_{ij}$ = distance dans le graphe, $L_0$ = constante)
+    \item $k_{ij} = K / d_{ij}^2$ est la constante de raideur du ressort
+\end{itemize}
+
+La minimisation de $E$ est effectuée par la méthode de Newton-Raphson.
+
+\subsection{Autres Layouts}
+
+\begin{itemize}
+    \item \textbf{Layout Circulaire~:} Les n\oe{}uds sont disposés à intervalles réguliers sur un cercle. Position du n\oe{}ud $i$~: $\text{pos}(v_i) = (\cos(\frac{2\pi i}{n}), \sin(\frac{2\pi i}{n}))$.
+    \item \textbf{Layout Shell~:} Les n\oe{}uds sont disposés sur des cercles concentriques selon leur groupe social.
+\end{itemize}
+
+% =============================================================================
+% 6. RÉDUCTION DE DIMENSION
+% =============================================================================
+\section{Techniques de Réduction de Dimension}
+\label{sec:reduction}
+
+Pour positionner les n\oe{}uds selon leurs caractéristiques topologiques (et non leur connectivité directe), nous construisons un vecteur de caractéristiques pour chaque n\oe{}ud et appliquons des techniques de réduction de dimension.
+
+\subsection{Construction du Vecteur de Caractéristiques}
+
+Pour chaque n\oe{}ud $v_i$, on construit un vecteur $\mathbf{f}_i \in \mathbb{R}^5$~:
+\[
+    \mathbf{f}_i = \begin{pmatrix}
+        C_D(v_i) \\
+        C_B(v_i) \\
+        C_C(v_i) \\
+        C_{\text{clust}}(v_i) \\
+        \deg(v_i)
+    \end{pmatrix}
+\]
+
+La matrice de caractéristiques est $X \in \mathbb{R}^{25 \times 5}$.
+
+\subsection{Analyse en Composantes Principales (ACP/PCA)}
+
+\subsubsection{Objectif}
+
+L'ACP cherche à projeter les données de $\mathbb{R}^p$ dans un sous-espace de dimension $k < p$ tout en maximisant la variance conservée.
+
+\subsubsection{Étapes Mathématiques}
+
+\begin{enumerate}
+    \item \textbf{Centrage des données~:}
+    \[
+        \tilde{X} = X - \bar{X} \quad \text{où } \bar{X}_j = \frac{1}{n} \sum_{i=1}^{n} X_{ij}
+    \]
+
+    \item \textbf{Matrice de covariance~:}
+    \[
+        C = \frac{1}{n-1} \tilde{X}^T \tilde{X} \in \mathbb{R}^{p \times p}
+    \]
+    $C_{ij} = \text{Cov}(X_i, X_j) = \mathbb{E}[(X_i - \bar{X}_i)(X_j - \bar{X}_j)]$
+
+    \item \textbf{Décomposition en valeurs propres~:}
+    \[
+        C \mathbf{v}_k = \lambda_k \mathbf{v}_k \quad \text{avec } \lambda_1 \geq \lambda_2 \geq \cdots \geq \lambda_p \geq 0
+    \]
+    Les $\mathbf{v}_k$ sont les \emph{directions principales} (axes de variance maximale).
+
+    \item \textbf{Projection~:}
+    \[
+        Y = \tilde{X} \cdot V_k \in \mathbb{R}^{n \times k}
+    \]
+    où $V_k = [\mathbf{v}_1 | \mathbf{v}_2 | \cdots | \mathbf{v}_k] \in \mathbb{R}^{p \times k}$.
+\end{enumerate}
+
+\begin{theoreme}[Optimalité de la PCA]
+Parmi toutes les projections linéaires de rang $k$, la PCA minimise l'erreur de reconstruction au sens des moindres carrés~:
+\[
+    V_k = \arg\min_{\substack{W \in \mathbb{R}^{p \times k} \\ W^T W = I_k}} \sum_{i=1}^{n} \|\tilde{x}_i - W W^T \tilde{x}_i\|^2
+\]
+\end{theoreme}
+
+\subsubsection{Variance Expliquée}
+
+La proportion de variance expliquée par les $k$ premières composantes est~:
+\[
+    \text{VE}_k = \frac{\sum_{j=1}^{k} \lambda_j}{\sum_{j=1}^{p} \lambda_j}
+\]
+
+\textbf{Résultat~:} Avec $k = 2$~: $\text{VE}_2 = 99{,}8\%$. Cela signifie que les 2 premières composantes principales capturent 99,8\% de la variance totale des 5 caractéristiques.
+
+\subsection{t-SNE (t-Distributed Stochastic Neighbor Embedding)}
+
+\subsubsection{Principe}
+
+t-SNE (van der Maaten \& Hinton, 2008) est une technique de réduction de dimension \emph{non linéaire} qui préserve la structure locale des données.
+
+\subsubsection{Formulation Mathématique}
+
+\begin{enumerate}
+    \item \textbf{Similarités dans l'espace de haute dimension.} Pour chaque paire $(i, j)$, on définit~:
+    \[
+        p_{j|i} = \frac{\exp\left(-\frac{\|x_i - x_j\|^2}{2\sigma_i^2}\right)}{\sum_{k \neq i} \exp\left(-\frac{\|x_i - x_k\|^2}{2\sigma_i^2}\right)}
+    \]
+    et on symétrise~: $p_{ij} = \frac{p_{j|i} + p_{i|j}}{2n}$
+
+    Le paramètre $\sigma_i$ est choisi tel que la perplexité soit égale à une valeur cible (dans notre cas, 5).
+
+    \item \textbf{Similarités dans l'espace de basse dimension.} On utilise une distribution de Student à 1 degré de liberté (distribution de Cauchy)~:
+    \[
+        q_{ij} = \frac{(1 + \|y_i - y_j\|^2)^{-1}}{\sum_{k \neq l} (1 + \|y_k - y_l\|^2)^{-1}}
+    \]
+    Le choix de la distribution de Student (queues lourdes) permet de mieux préserver les voisinages tout en évitant le \emph{crowding problem}.
+
+    \item \textbf{Minimisation de la divergence de Kullback-Leibler~:}
+    \[
+        \text{KL}(P \| Q) = \sum_{i \neq j} p_{ij} \log \frac{p_{ij}}{q_{ij}}
+    \]
+    Le gradient est~:
+    \[
+        \frac{\partial \text{KL}}{\partial y_i} = 4 \sum_{j \neq i} (p_{ij} - q_{ij})(y_i - y_j)(1 + \|y_i - y_j\|^2)^{-1}
+    \]
+    La minimisation est effectuée par descente de gradient avec \emph{momentum}.
+\end{enumerate}
+
+\begin{definition}[Perplexité]
+La \emph{perplexité} est une mesure de la taille effective du voisinage~:
+\[
+    \text{Perp}(P_i) = 2^{H(P_i)} \quad \text{où } H(P_i) = -\sum_j p_{j|i} \log_2 p_{j|i}
+\]
+est l'entropie de Shannon de la distribution conditionnelle $P_i$. Une perplexité de 5 signifie que chaque point considère effectivement environ 5 voisins.
+\end{definition}
+
+\subsection{Comparaison PCA vs t-SNE}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Critère} & \textbf{PCA} & \textbf{t-SNE} \\
+\midrule
+Type de transformation & Linéaire & Non linéaire \\
+Objectif & Maximiser la variance & Préserver les voisinages \\
+Coût computationnel & $O(np^2 + p^3)$ & $O(n^2)$ par itération \\
+Reproductibilité & Déterministe & Stochastique (dépend du seed) \\
+Interprétabilité des axes & Oui (composantes principales) & Non \\
+Préservation globale & Bonne & Faible \\
+Préservation locale & Moyenne & Excellente \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison des techniques de réduction de dimension}
+\end{table}
+
+% =============================================================================
+% 7. RÉSULTATS
+% =============================================================================
+\section{Résultats Expérimentaux}
+\label{sec:resultats}
+
+\subsection{Description du Graphe Construit}
+
+Le réseau social modélisé comprend 25 utilisateurs répartis en 3 groupes sociaux~:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcp{9cm}}
+\toprule
+\textbf{Groupe} & \textbf{Effectif} & \textbf{Membres} \\
+\midrule
+Étudiants & 10 & Alice, Charlie, Eve, Grace, Ivy, Mia, Olivia, Quinn, Tina, Wendy \\
+Professionnels & 9 & Bob, Diana, Frank, Henry, Jack, Nathan, Rachel, Uma, Xavier \\
+Artistes & 6 & Kate, Leo, Paul, Sam, Victor, Yara \\
+\bottomrule
+\end{tabular}
+\caption{Composition des groupes sociaux du réseau}
+\end{table}
+
+\subsection{Métriques Globales}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrl}
+\toprule
+\textbf{Métrique} & \textbf{Valeur} & \textbf{Interprétation} \\
+\midrule
+$|V|$ (n\oe{}uds) & 25 & Nombre d'utilisateurs \\
+$|E|$ (arêtes) & 40 & Nombre de relations \\
+$\delta(G)$ (densité) & 0,1333 & 13,3\% des connexions possibles \\
+$\text{diam}(G)$ & 6 & Distance maximale entre deux personnes \\
+$\text{rad}(G)$ & 4 & Excentricité minimale \\
+$\bar{d}$ (degré moyen) & 3,20 & En moyenne $\sim$3 amis par personne \\
+$\bar{C}$ (clustering moyen) & 0,0240 & Peu de triangles (amis communs) \\
+$C_{\text{global}}$ (transitivité) & 0,0309 & Structure peu clusterisée \\
+\bottomrule
+\end{tabular}
+\caption{Métriques globales du réseau}
+\end{table}
+
+\subsection{Utilisateurs les Plus Influents}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{clcc}
+\toprule
+\textbf{Rang} & \textbf{Nom} & \textbf{$C_D$ (degré)} & \textbf{$C_B$ (intermédiarité)} \\
+\midrule
+1 & Alice & 0,208 & 0,194 \\
+2 & Bob & 0,167 & 0,186 \\
+3 & Diana & 0,167 & -- \\
+4 & Frank & 0,167 & -- \\
+5 & Henry & 0,167 & 0,163 \\
+\bottomrule
+\end{tabular}
+\caption{Top 5 des utilisateurs par centralité de degré}
+\end{table}
+
+\subsection{Communautés Détectées}
+
+L'algorithme de maximisation gloutonne de la modularité (\emph{Greedy Modularity}) a identifié 5 communautés avec une modularité $Q = 0{,}3991$.
+
+\begin{definition}[Modularité]
+La modularité mesure la qualité d'une partition en communautés~:
+\[
+    Q = \frac{1}{2m} \sum_{ij} \left[ A_{ij} - \frac{d_i d_j}{2m} \right] \delta(c_i, c_j)
+\]
+où $c_i$ est la communauté du n\oe{}ud $i$ et $\delta$ est le symbole de Kronecker. $Q \in [-0{,}5, 1]$~; $Q > 0{,}3$ indique une structure communautaire significative.
+\end{definition}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cl}
+\toprule
+\textbf{Communauté} & \textbf{Membres} \\
+\midrule
+1 & Paul, Quinn, Sam, Frank, Wendy, Victor, Mia \\
+2 & Alice, Charlie, Grace, Yara, Kate, Leo \\
+3 & Ivy, Bob, Diana, Eve \\
+4 & Henry, Jack, Tina, Olivia \\
+5 & Xavier, Rachel, Uma, Nathan \\
+\bottomrule
+\end{tabular}
+\caption{Communautés détectées par maximisation de la modularité}
+\end{table}
+
+\subsection{Validation des Implémentations Manuelles}
+
+Toutes les mesures de centralité calculées manuellement (sans utiliser NetworkX) ont été vérifiées et correspondent exactement aux résultats de la bibliothèque~:
+
+\begin{itemize}
+    \item Centralité de degré~: \textbf{correspondance exacte} ($\epsilon < 10^{-6}$)
+    \item Centralité de proximité~: \textbf{correspondance exacte} ($\epsilon < 10^{-6}$)
+    \item Centralité d'intermédiarité~: \textbf{correspondance exacte} ($\epsilon < 10^{-3}$)
+    \item PCA manuelle vs scikit-learn~: \textbf{variance expliquée identique} (99,8\%)
+\end{itemize}
+
+% =============================================================================
+% 8. ANALYSE
+% =============================================================================
+\section{Analyse Détaillée}
+\label{sec:analyse}
+
+\subsection{Structure Topologique du Réseau}
+
+\subsubsection{Analyse de la Densité}
+Le réseau présente une densité $\delta = 0{,}1333$, ce qui est caractéristique d'un réseau social réel où les individus ont un nombre limité de connexions. En comparaison, un graphe aléatoire d'Erdős-Rényi $G(25, 0{,}13)$ aurait environ le même nombre d'arêtes ($\mathbb{E}[|E|] = \binom{25}{2} \times 0{,}13 \approx 39$).
+
+\subsubsection{Analyse Spectrale}
+L'analyse des valeurs propres de la matrice Laplacienne révèle~:
+\begin{itemize}
+    \item $\lambda_1 = 0$~: confirme que le graphe est connexe (une seule composante).
+    \item $\lambda_2 = 0{,}307$~: la connectivité algébrique de Fiedler est relativement faible, indiquant que le graphe peut être facilement coupé en deux parties.
+    \item Le spectre montre un écart (\emph{spectral gap}) après $\lambda_5$, ce qui est cohérent avec la détection de 5 communautés.
+\end{itemize}
+
+\subsection{Rôle des Utilisateurs Clés}
+
+\textbf{Alice} se distingue comme l'utilisateur le plus central selon toutes les mesures~:
+\begin{itemize}
+    \item $C_D = 0{,}208$ (5 connexions, le maximum)
+    \item $C_B = 0{,}194$ (fait le pont entre les trois groupes)
+    \item $C_C = 0{,}414$ (la plus haute proximité)
+\end{itemize}
+
+Alice est connectée aux trois groupes (Étudiants, Professionnels, Artistes), ce qui en fait un \emph{connecteur} ou \emph{broker} crucial dans le réseau.
+
+\textbf{Bob} est le second utilisateur clé avec un fort rôle d'intermédiarité ($C_B = 0{,}186$), servant de pont principal entre les Professionnels et les autres groupes.
+
+\subsection{Communautés vs Groupes Originaux}
+
+Les 5 communautés détectées \textbf{ne correspondent pas exactement} aux 3 groupes sociaux définis initialement~:
+\begin{itemize}
+    \item La communauté 2 mélange Étudiants (Alice, Charlie, Grace) et Artistes (Kate, Leo, Yara)
+    \item La communauté 1 est la plus grande (7 membres) et mélange tous les groupes
+\end{itemize}
+
+Cela montre que les connexions inter-groupes créent des sous-communautés hybrides qui transcendent les catégories sociales prédéfinies.
+
+\subsection{Comparaison des Layouts}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lp{5cm}p{5cm}}
+\toprule
+\textbf{Layout} & \textbf{Avantage} & \textbf{Inconvénient} \\
+\midrule
+Spring (F-R) & Révèle les clusters naturels par les forces physiques & Résultat peut varier, pas d'optimalité garantie \\
+Spectral & Fondement mathématique solide (valeurs propres de $L$) & Moins intuitif visuellement \\
+Kamada-Kawai & Distances proportionnelles aux distances dans le graphe & Calcul plus coûteux ($O(n^2 \log n)$) \\
+Circulaire & Vue d'ensemble claire et symétrique & Perd toute information de proximité \\
+Shell & Séparation explicite par catégorie & Impose une structure rigide \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison qualitative des algorithmes de layout}
+\end{table}
+
+\subsection{Analyse PCA vs t-SNE}
+
+\begin{itemize}
+    \item \textbf{PCA} avec 99,8\% de variance expliquée en 2 composantes montre que l'espace des caractéristiques est essentiellement bidimensionnel. Cela s'explique par la forte corrélation entre la centralité de degré et le degré brut ($r \approx 1$).
+    \item \textbf{t-SNE} avec perplexité 5 révèle mieux les groupements locaux mais les distances globales ne sont pas interprétables. Les artistes tendent à se regrouper distinctement des étudiants et professionnels.
+\end{itemize}
+
+% =============================================================================
+% 9. CONCLUSION
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+Ce projet a permis de~:
+
+\begin{enumerate}
+    \item \textbf{Construire} un graphe simple non orienté $G = (V, E)$ avec $|V| = 25$ et $|E| = 40$, modélisant un mini réseau social réaliste.
+
+    \item \textbf{Comprendre et implémenter} les fondements mathématiques des algorithmes utilisés~: matrice d'adjacence, matrice Laplacienne et son spectre, mesures de centralité (degré, proximité, intermédiarité par l'algorithme de Brandes), et ACP par décomposition en valeurs propres de la matrice de covariance.
+
+    \item \textbf{Comparer 5 techniques de layout} (Spring, Spectral, Kamada-Kawai, Circulaire, Shell), chacune révélant des aspects différents de la structure topologique du graphe.
+
+    \item \textbf{Appliquer des techniques de réduction de dimension} (ACP linéaire et t-SNE non linéaire) pour positionner les n\oe{}uds selon leurs caractéristiques topologiques, avec une validation croisée entre implémentation manuelle et bibliothèque.
+
+    \item \textbf{Identifier les utilisateurs centraux}~: Alice ($C_D = 0{,}208$, $C_B = 0{,}194$) et Bob ($C_D = 0{,}167$, $C_B = 0{,}186$) sont les n\oe{}uds les plus influents du réseau.
+
+    \item \textbf{Détecter 5 communautés} par maximisation de la modularité ($Q = 0{,}399$), montrant que les communautés réelles transcendent les catégories sociales prédéfinies.
+\end{enumerate}
+
+\subsection*{Perspectives}
+
+\begin{itemize}
+    \item Ajouter des poids aux arêtes pour modéliser la force des relations.
+    \item Étudier l'évolution temporelle du réseau (graphes dynamiques).
+    \item Explorer d'autres algorithmes de détection de communautés (Louvain, propagation d'étiquettes).
+    \item Appliquer la décomposition en valeurs singulières (SVD) comme alternative à la PCA.
+\end{itemize}
+
+% =============================================================================
+% RÉFÉRENCES
+% =============================================================================
+\begin{thebibliography}{9}
+
+\bibitem{fruchterman1991}
+Fruchterman, T.M.J. et Reingold, E.M. (1991). \emph{Graph Drawing by Force-Directed Placement}. Software -- Practice and Experience, 21(11), 1129--1164.
+
+\bibitem{kamada1989}
+Kamada, T. et Kawai, S. (1989). \emph{An Algorithm for Drawing General Undirected Graphs}. Information Processing Letters, 31(1), 7--15.
+
+\bibitem{brandes2001}
+Brandes, U. (2001). \emph{A Faster Algorithm for Betweenness Centrality}. Journal of Mathematical Sociology, 25(2), 163--177.
+
+\bibitem{vandermaaten2008}
+van der Maaten, L. et Hinton, G. (2008). \emph{Visualizing Data using t-SNE}. Journal of Machine Learning Research, 9, 2579--2605.
+
+\bibitem{fiedler1973}
+Fiedler, M. (1973). \emph{Algebraic Connectivity of Graphs}. Czechoslovak Mathematical Journal, 23(2), 298--305.
+
+\bibitem{newman2006}
+Newman, M.E.J. (2006). \emph{Modularity and Community Structure in Networks}. Proceedings of the National Academy of Sciences, 103(23), 8577--8582.
+
+\bibitem{jolliffe2002}
+Jolliffe, I.T. (2002). \emph{Principal Component Analysis}. Springer Series in Statistics, 2e édition.
+
+\end{thebibliography}
+
+\end{document}

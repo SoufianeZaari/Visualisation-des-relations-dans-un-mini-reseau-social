@@ -4,9 +4,14 @@ from src.construction_graphe import creer_reseau_social, sauvegarder_graphe
 from src.visualisation import (appliquer_layouts, visualiser_layout_unique, 
                                 visualiser_tous_layouts)
 from src.reduction_dimension import (appliquer_pca, appliquer_tsne, 
-                                     visualiser_reduction_dimension)
+                                     visualiser_reduction_dimension,
+                                     creer_matrice_caracteristiques)
 from src.analyse import analyser_reseau, afficher_rapport_analyse, visualiser_metriques
 from src.visualisation_3d import visualisation_3d
+from src.mathematiques import (construire_matrice_adjacence,
+                               visualiser_analyse_mathematique,
+                               visualiser_pca_manuelle,
+                               afficher_rapport_mathematique)
 
 def main():
     
@@ -43,7 +48,14 @@ def main():
     afficher_rapport_analyse(analyse, G)
     visualiser_metriques(G, analyse)
     
-    print("\nEtape 5: Creation de la visualisation 3D...")
+    print("\nEtape 5: Analyse mathematique (implementations manuelles)...")
+    A, nodes_list, node_index = construire_matrice_adjacence(G)
+    visualiser_analyse_mathematique(G, A, nodes_list, node_index)
+    features, feat_nodes = creer_matrice_caracteristiques(G)
+    visualiser_pca_manuelle(G, features, feat_nodes)
+    afficher_rapport_mathematique(G, A, nodes_list)
+
+    print("\nEtape 6: Creation de la visualisation 3D...")
     visualisation_3d(G)
     print("   Visualisation 3D sauvegardee (reseau_3d.html)")
     
